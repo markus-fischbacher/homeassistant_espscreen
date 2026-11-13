@@ -265,3 +265,12 @@ waveshare43c:
   status: experimental
   # The 4.3's glass with Waveshare's CH32V003 expander in place of the CH422G (website discussion 10): a 4.3C built
   # from the 4.3's board file starts with its touch chip in reset.
+
+waveshare4rev3:
+  file: waveshare-esp32s3-4-rev3.yaml
+  name: Waveshare
+  model: ESP32-S3-Touch-LCD-4 Rev3.0
+  status: experimental
+  # Revision 3.0, with a TCA9554 expander (not Revision 4.0's CH32V003, and not the "4B" board - both of
+  # those have other pins). Pieced together from Waveshare's own V3.0 example repo and community sources;
+  # the RGB bus pins and timings are not yet confirmed on real hardware.

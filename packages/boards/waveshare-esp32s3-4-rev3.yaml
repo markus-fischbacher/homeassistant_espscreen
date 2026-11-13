@@ -1,0 +1,153 @@
+# ESP Screens - Waveshare ESP32-S3-Touch-LCD-4 board, Hardware-Revision 3.0, DRAFT/experimental: a 4-inch
+# 480 x 480 IPS panel (ST7701S over RGB) with GT911 capacitive touch and a TCA9554 expander, on an ESP32-S3.
+# NOT the "4B" board (packages/boards/waveshare-esp32s3-4b.yaml) and NOT Revision 4.0
+# (packages/boards/waveshare-esp32s3-4v4.yaml, which has Waveshare's CH32V003 expander instead of a TCA9554):
+# those two board files use OTHER pins, confirmed by their own comments and by this research. There is no
+# upstream board file for the plain Rev 3.0 board yet.
+#
+# CONFIDENCE (built 2026-11-13, see the accompanying GitHub issue/PR description for full sourcing):
+#   HIGH    -> i2c (sda/scl), the pca9554 address, the expander's pin roles (touch reset/backlight enable/
+#              LCD reset), and the GT911 interrupt pin. Confirmed independently by Waveshare's own official
+#              example repo (waveshareteam/ESP32-S3-Touch-LCD-4, branch V3.0) and by vincentmakes/
+#              ComfoSense-Touch (src/board_config.h, which auto-detects Rev3 vs Rev4 hardware).
+#   MEDIUM  -> the ST7701S init sequence `model: ST7701S` supplies (ESPHome's built-in generic sequence):
+#              cross-checked against the exact "vendor_specific_init_default[]" table in Waveshare's own
+#              bundled ESP32_Display_Panel library (src/drivers/lcd/port/esp_lcd_st7701_rgb.c) and found to
+#              be the same family of generic ST7701S bring-up commands; should work, not vendor-unique.
+#   LOW     -> the RGB data bus pins (de/pclk/hsync/vsync/red/green/blue) and the init-SPI pins
+#              (clk/mosi/cs). Only one source: ay129-35MR/Waveshare-ESP32-S3-Touch-LCD-4-Home-Assistant-
+#              Display, an ESPHome config whose own author marked it untested/incomplete.
+#   GUESS   -> hsync/vsync timings (porches, pulse widths), color_order, invert_colors, flash_size,
+#              hardware_uart: copied from waveshare-esp32s3-4b.yaml (same chip family/resolution, different
+#              board) as a starting point, NOT measured on this board.
+#
+# Do not flash this to a board you cannot recover: keep a USB/esptool reflash ready in case the display or
+# touch stays dead. The first things to re-check if the picture is wrong or missing are, in this order: the
+# RGB bus pins, the init-SPI pins/cs_pin, then the timings.
+packages:
+  hardware: !include ../hardware/esp32s3-rgb.yaml
+  look: !include ../looks/standard.yaml
+  touch: !include ../features/capacitive-touch.yaml
+  backlight: !include ../features/backlight.yaml
+  camera: !include ../features/camera.yaml
+  self_test: !include ../features/self-test.yaml
+  snapshot: !include ../features/snapshot.yaml
+
+substitutions:
+  BOARD_ID: "waveshare4rev3"
+  DEVICE_NAME: "waveshare4rev3-new"
+  DEVICE_FRIENDLY_NAME: "My Waveshare 4 Rev3"
+
+  # Same glass size/resolution as the 4B board and the 4-inch Guition.
+  PANEL_W: "480"
+  PANEL_H: "480"
+  DISPLAY_DPI: "170"
+  GRID_COLS: "2"
+  GRID_ROWS: "3"
+  SCREEN_MAX_TILES: "128"
+  SCREEN_MAX_PAGES: "24"
+  SCREEN_MAX_BAR_ITEMS: "12"
+  LVGL_BUFFER_SIZE: "25%"
+
+# ============================================================
+# No need to edit below this line.
+# ============================================================
+
+esp32:
+  flash_size: 16MB   # GUESS - not confirmed for Rev 3.0, copied from the 4B board
+
+logger:
+  tx_buffer_size: 2048
+  hardware_uart: UART0   # GUESS - not confirmed for Rev 3.0
+
+# Confirmed by Waveshare's own official V3.0 example (examples/Arduino-v3.1.3/.../IOExpander_general_example)
+# and independently by vincentmakes/ComfoSense-Touch's board auto-detection code.
+i2c:
+  id: touch_bus
+  sda: GPIO15
+  scl: GPIO7
+  frequency: 400kHz
+  scan: true
+
+# TCA9554 (not the CH32V003 that Revision 4.0 carries). Pin roles per Waveshare's own example:
+# EXIO0 touch reset, EXIO1 backlight enable, EXIO2 LCD reset, EXIO3 SD-card interrupt (unused here),
+# EXIO5 buzzer / backlight dimming (unused here - see the output: block below).
+pca9554:
+  - id: expander
+    address: 0x20
+    i2c_id: touch_bus
+
+# LOW confidence: unlike the 4B board, Waveshare's own IOExpander example does NOT list the expander's
+# EXIO0-2 as the ST7701S's SPI lines on this board (they are touch-reset/backlight/LCD-reset instead), so
+# the panel's 3-wire setup bus is assumed to be on direct ESP32 GPIOs here. Pins below are an untested
+# guess (ay129-35MR).
+spi:
+  id: lcd
+  clk_pin: GPIO2
+  mosi_pin: GPIO1
+
+# This board's backlight is a plain enable line into an AP3032-style boost driver (Waveshare's own
+# example calls EXIO1 "backlight control"), not a PWM-capable GPIO like the 4B board's GPIO4. True
+# dimming would need bit-banging EXIO5 the way ComfoSense-Touch does, which ESPHome's PWM outputs
+# cannot do over an I2C expander pin - so brightness here is effectively on/off until someone works
+# out real dimming.
+output:
+  - platform: gpio
+    id: gpio_backlight_pwm
+    pin:
+      pca9554: expander
+      number: 1
+      allow_other_uses: true
+
+# Confirmed: GT911 interrupt on direct GPIO16 (Waveshare's own example + ComfoSense-Touch), reset on the
+# expander's touch-reset line (EXIO0).
+touchscreen:
+  - platform: gt911
+    id: ts_touch
+    i2c_id: touch_bus
+    display: my_display
+    reset_pin:
+      pca9554: expander
+      number: 0
+      allow_other_uses: true
+    update_interval: 20ms
+
+# ESPHome's generic ST7701S model brings the panel's init sequence (cross-checked against Waveshare's own
+# bundled driver library and found to be the same generic bring-up table - see CONFIDENCE above). The pins
+# and timings below are this board's, and are the LOW/GUESS confidence values described at the top of this
+# file - the first things to fix if the picture is wrong.
+display:
+  - platform: mipi_rgb
+    model: ST7701S
+    id: my_display
+    spi_id: lcd
+    cs_pin: GPIO42
+    data_rate: 1MHz
+    dimensions:
+      width: ${PANEL_W}
+      height: ${PANEL_H}
+    de_pin: GPIO40
+    pclk_pin: GPIO41
+    hsync_pin:
+      number: GPIO38
+      ignore_strapping_warning: true
+    vsync_pin:
+      number: GPIO39
+      ignore_strapping_warning: true
+    pclk_frequency: 16MHz
+    pclk_inverted: false
+    hsync_pulse_width: 10
+    hsync_back_porch: 10
+    hsync_front_porch: 20
+    vsync_pulse_width: 10
+    vsync_back_porch: 10
+    vsync_front_porch: 10
+    pixel_mode: 18bit
+    color_order: RGB
+    invert_colors: true
+    data_pins:
+      red: [GPIO46, GPIO3, GPIO8, GPIO18, GPIO17]
+      green: [GPIO14, GPIO13, GPIO12, GPIO11, GPIO10, GPIO9]
+      blue: [GPIO5, GPIO45, GPIO48, GPIO47, GPIO21]
+    update_interval: never
+    auto_clear_enabled: false
