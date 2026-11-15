@@ -91,12 +91,19 @@ spi:
 # cannot do over an I2C expander pin - so brightness here is effectively on/off until someone works
 # out real dimming.
 output:
-  - platform: gpio
+  # features/backlight.yaml needs a float output: this one switches the expander line on for any level above 0.
+  - platform: template
     id: gpio_backlight_pwm
+    type: float
+    write_action:
+      - lambda: id(backlight_line).set_state(state > 0.0f);
+  - platform: gpio
+    id: backlight_line
     pin:
       pca9554: expander
       number: 1
-      allow_other_uses: true
+      mode:
+        output: true
 
 # Confirmed: GT911 interrupt on direct GPIO16 (Waveshare's own example + ComfoSense-Touch), reset on the
 # expander's touch-reset line (EXIO0).
@@ -108,7 +115,6 @@ touchscreen:
     reset_pin:
       pca9554: expander
       number: 0
-      allow_other_uses: true
     update_interval: 20ms
 
 # ESPHome's generic ST7701S model brings the panel's init sequence (cross-checked against Waveshare's own
@@ -127,12 +133,8 @@ display:
       height: ${PANEL_H}
     de_pin: GPIO40
     pclk_pin: GPIO41
-    hsync_pin:
-      number: GPIO38
-      ignore_strapping_warning: true
-    vsync_pin:
-      number: GPIO39
-      ignore_strapping_warning: true
+    hsync_pin: GPIO38
+    vsync_pin: GPIO39
     pclk_frequency: 16MHz
     pclk_inverted: false
     # Porches and pulse widths from Waveshare's V3.0 Arduino examples (Arduino_ESP32RGBPanel arguments)
