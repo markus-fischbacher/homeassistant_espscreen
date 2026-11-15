@@ -84,12 +84,15 @@ pins, a dark screen or dead touch on the first boot is expected, not a sign of b
 | TCA9554 address (0x20) and its pin roles (EXIO0 touch reset, EXIO1 backlight enable, EXIO2 LCD reset) | High | Same two sources, independently |
 | GT911 touch interrupt (GPIO16, direct) | High | Same two sources |
 | ST7701S init sequence (`model: ST7701S` in ESPHome's `mipi_rgb`) | Medium | Cross-checked against Waveshare's own bundled driver library (`esp_lcd_st7701_rgb.c`); generic, not vendor-tuned for this exact glass |
-| RGB data bus pins (DE/PCLK/HSYNC/VSYNC/R/G/B) | Low | One source only ([ay129-35MR](https://github.com/ay129-35MR/Waveshare-ESP32-S3-Touch-LCD-4-Home-Assistant-Display)), itself marked untested/incomplete |
-| Init-SPI pins (CLK/MOSI/CS) | Low | Same source as above |
-| HSYNC/VSYNC timings, flash size, UART | Guess | Copied from the unrelated "4B" board as a starting point, not measured here |
+| RGB data bus pins (DE 40, VSYNC 39, HSYNC 38, PCLK 41, R/G/B as in the YAML) | High (source), untested on hardware | Waveshare's V3.0 branch, `examples/Arduino-v3.1.3/examples/01_HelloWorld.ino` (`Arduino_ESP32RGBPanel`); also matches [ay129-35MR](https://github.com/ay129-35MR/Waveshare-ESP32-S3-Touch-LCD-4-Home-Assistant-Display) |
+| Init-SPI pins (CLK GPIO2, MOSI GPIO1, CS GPIO42) | High (source), untested on hardware | Same file (`Arduino_SWSPI`) |
+| HSYNC timings (pulse 8, back porch 50, front porch 10) and VSYNC timings (pulse 8, back porch 20, front porch 10) | High (source), untested on hardware | Same file; previously a guess copied from the "4B" board |
+| Pixel clock (16 MHz), `pclk_inverted`, `color_order`, `invert_colors` | Guess | Not given by the Arduino example; kept from the "4B" board |
+| Flash size, UART | Guess | Copied from the "4B" board, not verified |
 
-If the picture is wrong or missing, check in this order: RGB bus pins first, then the init-SPI pins/`cs_pin`,
-then the timings.
+If the picture is wrong or missing, check in this order: pixel clock and polarity/colour settings, then the
+timings, then the pins. The Waveshare wiki and schematic were not read (bot check), so the pins are confirmed
+against Waveshare's example code only, not against the schematic.
 
 ## Hardware references
 
